@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Detalle de Película</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      .banner {
+        position: relative;
+        background-size: cover;
+        background-position: center;
+        color: white;
+        padding: 20px;
+        border-radius: 15px;
+      }
+
+      .overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        z-index: 1;
+        border-radius: 15px;
+      }
+
+      .content {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        gap: 20px;
+      }
+
+      .movie-info {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+
+      .movie-info h1,
+      .movie-info h4,
+      .movie-info p {
+        margin-bottom: 10px;
+      }
+
+      .movie-info h1 {
+        font-size: 3rem;
+      }
+
+      .poster {
+        max-width: 300px;
+        border-radius: 10px;
+      }
+
+      .actors {
+        margin-top: 20px;
+      }
+
+      .actors h4 {
+        font-size: 1.5rem;
+        margin-bottom: 10px;
+      }
+
+      .actors ul {
+        list-style-type: none;
+        padding: 0;
+      }
+
+      .actors li {
+        margin-bottom: 5px;
+      }
+
+      .rating-stars {
+        display: flex;
+        gap: 5px;
+        margin-top: 15px;
+      }
+
+      .rating-stars button {
+        background: none;
+        border: none;
+        color: gold;
+        font-size: 2rem;
+        cursor: pointer;
+      }
+
+      .rating-stars button:hover,
+      .rating-stars button.active {
+        color: darkorange;
+      }
+
+      .rating-stars button.inactive {
+        color: lightgray;
+      }
+
+      .rating-stars button.disabled {
+        pointer-events: none;
+        color: darkorange;
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  </head>
+  <body>
+    <div id="app" class="container mt-5">
+      <div v-if="loading" class="text-center">Cargando...</div>
+      <div v-if="!loading">
+        <div
+          class="banner"
+          :style="{ backgroundImage: 'url(https://image.tmdb.org/t/p/w1280/' + movie.backdrop_path + ')' }"
+        >
+          <div class="overlay"></div>
+          <div class="content">
+            <img
+              :src="'https://image.tmdb.org/t/p/w500/' + movie.poster_path"
+              class="poster"
+              alt="Poster"
+            />
+            <div class="movie-info">
+              <h1>{{ movie.title }}</h1>
+              <h4>Rating promedio: {{ movie.vote_average }}</h4>
+              <p>{{ movie.overview }}</p>
+
+              <div class="rating-section">
+                <h4>Agrega una Calificación:</h4>
+                <div class="rating-stars">
+                  <button
+                    v-for="star in 10"
+                    :key="star"
+                    @click="rateMovie(star)"
+                    :class="starClass(star)"
+                  >
+                    ★
+                  </button>
+                </div>
+                <button
+                  v-if="userRating !== null"
+                  @click="deleteRating"
+                  class="btn btn-danger mt-2"
+                >
+                  Eliminar Calificación
+                </button>
+              </div>
+
+              <div class="actors">
+                <h4>Actores Principales:</h4>
+                <ul>
+                  <li v-for="actor in actors" :key="actor.id">
+                    {{ actor.name }} / {{ actor.character }}
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const { createApp } = Vue;
+
+      createApp({
+        data() {
+          return {
+            movie: {},
+            actors: [],
+            userRating: null,
+            loading: true,
+            apiKey: "c163bbc2bad129ed390aa1e11cd87550",
+            guestSessionId: null,
+          };
+        },
+        methods: {
+          async fetchGuestSession() {
+            try {
+              const response = await axios.get(
+                `https://api.themoviedb.org/3/authentication/guest_session/new?api_key=${this.apiKey}`
+              );
+              this.guestSessionId = response.data.guest_session_id;
+            } catch (error) {
+              console.error("Error al generar sesión de invitado:", error);
+            }
+          },
+          fetchMovieDetails() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const movieId = urlParams.get("id");
+            axios
+              .get(
+                `https://api.themoviedb.org/3/movie/${movieId}?api_key=${this.apiKey}&language=es-ES`
+              )
+              .then((response) => {
+                this.movie = response.data;
+                this.loadRatingFromLocalStorage(movieId);
+                this.loading = false;
+              })
+              .catch((error) => {
+                console.error(error);
+                this.loading = false;
+              });
+            axios
+              .get(
+                `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${this.apiKey}`
+              )
+              .then((response) => {
+                this.actors = response.data.cast.slice(0, 5);
+              })
+              .catch((error) => {
+                console.error(error);
+              });
+          },
+          rateMovie(star) {
+            if (!this.guestSessionId) {
+              alert("No se ha generado una sesión de invitado");
+              return;
+            }
+            this.userRating = star;
+            const movieId = this.movie.id;
+            axios
+              .post(
+                `https://api.themoviedb.org/3/movie/${movieId}/rating?api_key=${this.apiKey}&guest_session_id=${this.guestSessionId}`,
+                {
+                  value: star * 2,
+                }
+              )
+              .then(() => {
+                alert("Calificación guardada");
+                this.saveRatingToLocalStorage(movieId, star);
+              })
+              .catch((error) => console.error(error));
+          },
+          deleteRating() {
+            if (!this.guestSessionId) {
+              alert("No se ha generado una sesión de invitado");
+              return;
+            }
+            const movieId = this.movie.id;
+            axios
+              .delete(
+                `https://api.themoviedb.org/3/movie/${movieId}/rating?api_key=${this.apiKey}&guest_session_id=${this.guestSessionId}`
+              )
+              .then(() => {
+                alert("Calificación eliminada");
+                this.userRating = null;
+                this.removeRatingFromLocalStorage(movieId);
+              })
+              .catch((error) => console.error(error));
+          },
+          starClass(star) {
+            if (this.userRating === null) {
+              return "inactive";
+            }
+            return star <= this.userRating ? "active" : "inactive";
+          },
+          saveRatingToLocalStorage(movieId, rating) {
+            localStorage.setItem(`movieRating_${movieId}`, rating);
+          },
+          loadRatingFromLocalStorage(movieId) {
+            const savedRating = localStorage.getItem(`movieRating_${movieId}`);
+            if (savedRating) {
+              this.userRating = parseInt(savedRating);
+            }
+          },
+          removeRatingFromLocalStorage(movieId) {
+            localStorage.removeItem(`movieRating_${movieId}`);
+          },
+        },
+        async mounted() {
+          await this.fetchGuestSession();
+          this.fetchMovieDetails();
+        },
+      }).mount("#app");
+    </script>
+  </body>
+</html>

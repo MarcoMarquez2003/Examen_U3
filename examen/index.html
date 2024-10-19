@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TMDb - Home</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f4f4f4;
+      }
+      nav {
+        background-color: rgba(5, 36, 116, 0.6);
+        padding: 1rem;
+        color: white;
+      }
+      nav ul {
+        list-style: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      nav ul li {
+        margin-right: 20px;
+      }
+
+      nav ul li a {
+        color: white;
+        text-decoration: none;
+        font-weight: bold;
+      }
+      .banner {
+        background-image: url("https://image.tmdb.org/t/p/original/6MKr3KgOLmzOP6MSuZERO41Lpkt.jpg");
+        background-size: cover;
+        color: white;
+        text-align: center;
+        padding: 100px 0;
+      }
+
+      .banner h1 {
+        font-size: 3rem;
+        margin-bottom: 20px;
+      }
+
+      .banner input {
+        padding: 10px;
+        width: 60%;
+        border: none;
+        border-radius: 5px;
+        font-size: 1rem;
+      }
+
+      section {
+        margin: 30px;
+      }
+
+      h2 {
+        margin-bottom: 10px;
+        color: #032541;
+      }
+
+      .carousel-container {
+        position: relative;
+        background-color: rgba(5, 36, 116, 0.6);
+        padding: 20px 0;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      .carousel {
+        display: flex;
+        overflow-x: auto;
+        gap: 20px;
+        scroll-behavior: smooth;
+        padding: 0 50px;
+      }
+
+      .carousel::-webkit-scrollbar {
+        display: none;
+      }
+
+      .carousel-item {
+        min-width: 150px;
+        background-color: white;
+        padding: 10px;
+        border-radius: 8px;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        flex-shrink: 0;
+      }
+
+      .carousel-item img {
+        width: 100%;
+        height: 240px;
+        object-fit: cover;
+        border-radius: 8px;
+      }
+
+      .carousel-btn {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background-color: rgba(0, 0, 0, 0.5);
+        border: none;
+        color: white;
+        font-size: 24px;
+        padding: 10px;
+        cursor: pointer;
+        z-index: 1;
+      }
+
+      .prev-btn {
+        left: 10px;
+      }
+
+      .next-btn {
+        right: 10px;
+      }
+
+      .trailers iframe {
+        width: 240px;
+        height: 135px;
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <ul>
+        <li><a href="#">TMDb</a></li>
+        <li><a href="#">Peliculas</a></li>
+        <li><a href="#">Series</a></li>
+        <li><a href="#">Actores</a></li>
+        <li>
+          <input
+            type="text"
+            placeholder="Search..."
+            v-model="searchQuery"
+            @keyup.enter="searchMovies"
+          />
+        </li>
+      </ul>
+    </nav>
+    <div class="banner">
+      <h1>Bienvenido a The Movie DB</h1>
+      <input
+        type="text"
+        placeholder="Search for a movie..."
+        v-model="searchQuery"
+        @keyup.enter="searchMovies"
+      />
+    </div>
+
+    <div id="app">
+      <section v-if="trendingMovies.length">
+        <h2>Peliculas en tendencia</h2>
+        <div class="carousel-container">
+          <button
+            class="carousel-btn prev-btn"
+            @click="scrollCarousel('prev', 'moviesCarousel')"
+          >
+            &#10094;
+          </button>
+          <div class="carousel" id="moviesCarousel">
+            <div
+              class="carousel-item"
+              v-for="movie in trendingMovies"
+              :key="movie.id"
+            >
+              <img :src="getPoster(movie.poster_path)" :alt="movie.title" />
+              <h3>{{ movie.title }}</h3>
+            </div>
+          </div>
+          <button
+            class="carousel-btn next-btn"
+            @click="scrollCarousel('next', 'moviesCarousel')"
+          >
+            &#10095;
+          </button>
+        </div>
+      </section>
+      <section v-if="trailers.length">
+        <h2>Trailers en tendencia</h2>
+        <div class="carousel-container">
+          <button
+            class="carousel-btn prev-btn"
+            @click="scrollCarousel('prev', 'trailersCarousel')"
+          >
+            &#10094;
+          </button>
+          <div class="carousel" id="trailersCarousel">
+            <div
+              class="carousel-item"
+              v-for="trailer in trailers"
+              :key="trailer.id"
+            >
+              <iframe
+                v-if="trailer.trailerKey"
+                :src="'https://www.youtube.com/embed/' + trailer.trailerKey"
+                frameborder="0"
+                allowfullscreen
+              ></iframe>
+            </div>
+          </div>
+          <button
+            class="carousel-btn next-btn"
+            @click="scrollCarousel('next', 'trailersCarousel')"
+          >
+            &#10095;
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      new Vue({
+        el: "#app",
+        data: {
+          searchQuery: "",
+          trendingMovies: [],
+          trailers: [],
+        },
+        methods: {
+          getTrendingMovies() {
+            const apiKey = "c163bbc2bad129ed390aa1e11cd87550";
+            const url = `https://api.themoviedb.org/3/trending/movie/week?api_key=${apiKey}`;
+
+            fetch(url)
+              .then((response) => response.json())
+              .then((data) => {
+                this.trendingMovies = data.results;
+              })
+              .catch((error) =>
+                console.error("Error al obtener películas en tendencia:", error)
+              );
+          },
+          getLatestTrailers() {
+            const apiKey = "c163bbc2bad129ed390aa1e11cd87550";
+            const url = `https://api.themoviedb.org/3/movie/upcoming?api_key=${apiKey}&language=en-US&page=1`;
+
+            fetch(url)
+              .then((response) => response.json())
+              .then((data) => {
+                const upcomingMovies = data.results;
+                const trailerPromises = upcomingMovies.map((movie) => {
+                  const videoUrl = `https://api.themoviedb.org/3/movie/${movie.id}/videos?api_key=${apiKey}`;
+                  return fetch(videoUrl)
+                    .then((response) => response.json())
+                    .then((videoData) => {
+                      const trailer = videoData.results.find(
+                        (video) =>
+                          video.site === "YouTube" && video.type === "Trailer"
+                      );
+                      return trailer
+                        ? { ...movie, trailerKey: trailer.key }
+                        : null;
+                    });
+                });
+                Promise.all(trailerPromises)
+                  .then((trailers) => {
+                    this.trailers = trailers.filter(
+                      (trailer) => trailer !== null
+                    );
+                  })
+                  .catch((error) =>
+                    console.error("Error al obtener tráilers:", error)
+                  );
+              })
+              .catch((error) =>
+                console.error("Error al obtener próximas películas:", error)
+              );
+          },
+          searchMovies() {
+            const apiKey = "c163bbc2bad129ed390aa1e11cd87550";
+            const query = this.searchQuery;
+            const url = `https://api.themoviedb.org/3/search/movie?api_key=${apiKey}&query=${query}`;
+
+            fetch(url)
+              .then((response) => response.json())
+              .then((data) => {
+                this.trendingMovies = data.results;
+              })
+              .catch((error) =>
+                console.error("Error al buscar películas:", error)
+              );
+          },
+          getPoster(path) {
+            return path
+              ? `https://image.tmdb.org/t/p/w500${path}`
+              : "https://via.placeholder.com/200x300";
+          },
+          scrollCarousel(direction, carouselId) {
+            const carousel = document.getElementById(carouselId);
+            const scrollAmount = 300;
+            if (direction === "next") {
+              carousel.scrollLeft += scrollAmount;
+            } else {
+              carousel.scrollLeft -= scrollAmount;
+            }
+          },
+        },
+        created() {
+          this.getTrendingMovies();
+          this.getLatestTrailers();
+        },
+      });
+    </script>
+  </body>
+</html>
